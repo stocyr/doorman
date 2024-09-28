@@ -10,7 +10,7 @@
 #endif
 
 #ifdef ESP32
-#define PIN_BUS_READ 12
+#define PIN_BUS_READ 15
 #define PIN_BUS_WRITE 13
 #define SYSTEM_NAME "ESP32 Doorman"
 #endif

@@ -7,13 +7,17 @@
 #define OLED_RESET -1  // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C  // 0x78 = 0x3C << 1 (left shift by 1 bit due to arduino using 7bit I2C addresses)
 
+int sda_pin = 9;
+int scl_pin = 10;
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 void setup() {
-  Serial.println(F("Starting up..."));
   Serial.begin(115200);
+  Serial.println(F("Starting up..."));
 
   // Initialize I2C
+  Wire.setPins(sda_pin, scl_pin); // Set the I2C pins before begin
   Wire.begin();
 
   // Initialize OLED display
@@ -29,7 +33,7 @@ void setup() {
   display.setTextColor(SSD1306_WHITE);
 
   // Display some text
-  display.setTextSize(2);
+  display.setTextSize(1);
   display.setCursor(0, 0);
   display.println("Hello,");
   display.println("World!");

@@ -1,6 +1,9 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <WiFi.h>
+
+#include <display.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -10,38 +13,31 @@
 int sda_pin = 9;
 int scl_pin = 10;
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+DisplayHelper displayHelper;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("Starting up..."));
+  Serial.println(F("Starting up: Connecting to WIFI"));
+
+  // Connect to WiFi
+  WiFi.begin("Cyrah", "MornamNueni?");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  // Get the IP address
+  IPAddress ip = WiFi.localIP();
+  Serial.print(" Full IP Address: ");
+  Serial.println(ip);
 
   // Initialize I2C
-  Wire.setPins(sda_pin, scl_pin); // Set the I2C pins before begin
-  Wire.begin();
 
-  // Initialize OLED display
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); // Don't proceed, loop forever
-  }
-
-  // Clear the buffer
-  display.clearDisplay();
-
-  // Set text color
-  display.setTextColor(SSD1306_WHITE);
-
-  // Display some text
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.println("Hello,");
-  display.println("World!");
-
-  // Show the display buffer on the screen
-  display.display();
+  displayHelper.init();
+  displayHelper.oled_draw_wifi(WiFi.status() == WL_CONNECTED, ip[3]);
 }
 
 void loop() {
-  // Your main code here
+  // Add any additional logic here if needed
+  delay(500);
+  displayHelper.oled_draw_wifi(WiFi.status() == WL_CONNECTED, WiFi.localIP()[3]);
 }

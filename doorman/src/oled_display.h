@@ -5,6 +5,7 @@
 #include "Fonts/Org_01.h"
 #include "Fonts/TomThumb.h"
 #include "string.h"
+#include "platform.h"
 
 #define SSD1306_NO_SPLASH
 
@@ -33,8 +34,6 @@ class OLEDDisplay
 {
 private:
   Adafruit_SSD1306 display;
-  int sda_pin = 9;
-  int scl_pin = 10;
 
   bool wifi_active = false;
   int wifi_last_ip_octet = 0;
@@ -50,7 +49,7 @@ public:
   OLEDDisplay()
   {
     // Initialize I2C
-    Wire.setPins(sda_pin, scl_pin); // Set the I2C pins before begin
+    Wire.setPins(PIN_OLED_SDA, PIN_OLED_SCL); // Set the I2C pins before begin
     Wire.begin();
     display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 

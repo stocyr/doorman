@@ -8,12 +8,19 @@
 
 #include <oled_display.h>
 
+#define LED_WHITE 19
+
 OLEDDisplay oled_display;
 
 time_t target_time = 0;
 
 void setup()
 {
+  // Setup white LED
+  pinMode(LED_WHITE, OUTPUT);
+  digitalWrite(LED_WHITE, LOW);
+
+  // Disable bluetooth peripheral
   esp_bluedroid_disable();
   esp_bluedroid_deinit();
   esp_bt_controller_disable();

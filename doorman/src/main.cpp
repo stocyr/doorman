@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 #include <time.h>
+#include "esp_bt.h"
+#include "esp_bt_main.h"
 
 #include <oled_display.h>
 
@@ -12,6 +14,11 @@ time_t target_time = 0;
 
 void setup()
 {
+  esp_bluedroid_disable();
+  esp_bluedroid_deinit();
+  esp_bt_controller_disable();
+  esp_bt_controller_deinit();
+
   // Set up serial port
   Serial.begin(115200);
 
@@ -65,9 +72,14 @@ void setup()
 
   // Setup final display layout
   oled_display.update_wifi(WiFi.status() == WL_CONNECTED, WiFi.localIP()[3]);
-  oled_display.update_party_mode(false, *target_time_tm);
+  oled_display.update_party_mode(true, *target_time_tm);
   oled_display.update_bell_mute(false, tm{});
   oled_display.redraw();
+
+  // Prepare light sleep
+  // First disable WiFi:
+  // esp_wifi_stop();
+  // esp_light_sleep_start();
 }
 
 void loop()
@@ -78,9 +90,11 @@ void loop()
   // Handle future time callbacks
   tm timeinfo;
   getLocalTime(&timeinfo);
-  if (target_time != 0 && mktime(&timeinfo) >= target_time)
+  if ((target_time > 0) && (mktime(&timeinfo) >= target_time))
   {
+    Serial.println("Turning party mode off");
     oled_display.update_party_mode(false, tm{});
+    oled_display.redraw();
     target_time = 0;
   }
 }

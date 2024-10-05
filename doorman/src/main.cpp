@@ -2,42 +2,85 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
+#include <time.h>
 
-#include <display.h>
+#include <oled_display.h>
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1  // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C  // 0x78 = 0x3C << 1 (left shift by 1 bit due to arduino using 7bit I2C addresses)
+OLEDDisplay oled_display;
 
-int sda_pin = 9;
-int scl_pin = 10;
+time_t target_time = 0;
 
-DisplayHelper displayHelper;
-
-void setup() {
+void setup()
+{
+  // Set up serial port
   Serial.begin(115200);
-  Serial.println(F("Starting up: Connecting to WIFI"));
 
-  // Connect to WiFi
+  // Set up WiFi
+  oled_display.init("Starting WiFi...");
+  Serial.print("\nConnecting to WiFi...");
   WiFi.begin("Cyrah", "MornamNueni?");
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     delay(500);
-    Serial.print(".");
   }
-  // Get the IP address
-  IPAddress ip = WiFi.localIP();
-  Serial.print(" Full IP Address: ");
-  Serial.println(ip);
+  Serial.println(" Success.");
 
-  // Initialize I2C
+  // Synchronize RTC time with NTP server
+  oled_display.println("Synchronizing time...");
+  Serial.print("Syncing time with NTP server...");
+  struct tm timeinfo;
+  while (!getLocalTime(&timeinfo))
+  {
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "ch.pool.ntp.org");
+    delay(500);
+  }
+  Serial.println(" Success.");
 
-  displayHelper.init();
-  displayHelper.oled_draw_wifi(WiFi.status() == WL_CONNECTED, ip[3]);
+  // Finish stuff
+  oled_display.println("Startup complete.");
+  delay(1000);
+
+  // Add 5 dummy message entries
+  struct timeval tv_now;
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930029, "DBE");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930030, "DBF");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930031, "DBG");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930031, "DBH");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930031, "DBI");
+
+  target_time = mktime(&timeinfo) + 10;
+  struct tm *target_time_tm = localtime(&target_time);
+  Serial.print("Target time: ");
+  Serial.printf(asctime(target_time_tm));
+
+  // Setup final display layout
+  oled_display.update_wifi(WiFi.status() == WL_CONNECTED, WiFi.localIP()[3]);
+  oled_display.update_party_mode(false, *target_time_tm);
+  oled_display.update_bell_mute(false, tm{});
+  oled_display.redraw();
 }
 
-void loop() {
-  // Add any additional logic here if needed
+void loop()
+{
   delay(500);
-  displayHelper.oled_draw_wifi(WiFi.status() == WL_CONNECTED, WiFi.localIP()[3]);
+  oled_display.update_wifi(WiFi.status() == WL_CONNECTED, WiFi.localIP()[3]);
+
+  // Handle future time callbacks
+  tm timeinfo;
+  getLocalTime(&timeinfo);
+  if (target_time != 0 && mktime(&timeinfo) >= target_time)
+  {
+    oled_display.update_party_mode(false, tm{});
+    target_time = 0;
+  }
 }

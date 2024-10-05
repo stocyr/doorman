@@ -1,0 +1,49 @@
+void setup()
+{
+  // Finalize stuff
+  oled_display.println("Startup complete.");
+  delay(1000);
+
+  // Add 5 dummy message entries
+  struct timeval tv_now;
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930029, "DBE");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930030, "DBF");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930031, "DBG");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930031, "DBH");
+  getLocalTime(&timeinfo);
+  gettimeofday(&tv_now, NULL);
+  oled_display.add_message_to_history(timeinfo, (tv_now.tv_usec + 5e4) / 1e5, 0x3f930031, "DBI");
+
+  target_time = mktime(&timeinfo) + 10;
+  struct tm *target_time_tm = localtime(&target_time);
+  Serial.print("Target time: ");
+  Serial.printf(asctime(target_time_tm));
+
+
+  // Prepare light sleep
+  // First disable WiFi:
+  // esp_wifi_stop();
+  // esp_light_sleep_start();
+}
+
+void loop()
+{
+  // Handle future time callbacks
+  tm timeinfo;
+  getLocalTime(&timeinfo);
+  if ((target_time > 0) && (mktime(&timeinfo) >= target_time))
+  {
+    Serial.println("Turning party mode off");
+    oled_display.update_party_mode(false, tm{});
+    oled_display.redraw();
+    target_time = 0;
+  }
+}

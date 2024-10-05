@@ -111,7 +111,14 @@ public:
     message_history_ring_buffer[message_history_ring_buffer_pointer].timestamp = timeinfo;
     message_history_ring_buffer[message_history_ring_buffer_pointer].deci_seconds = deci_seconds;
     message_history_ring_buffer[message_history_ring_buffer_pointer].message_data = message_data;
-    translation.toCharArray(&message_history_ring_buffer[message_history_ring_buffer_pointer].translation[0], 4);
+    if (translation != NULL)
+    {
+      translation.toCharArray(&message_history_ring_buffer[message_history_ring_buffer_pointer].translation[0], 4);
+    }
+    else
+    {
+      message_history_ring_buffer[message_history_ring_buffer_pointer].translation[0] = '\0';
+    }
   }
 
   void draw_buttons()
@@ -205,7 +212,7 @@ public:
       display.printf("%04X ", bus_message->message_data >> 16);
       display.printf("%04X", bus_message->message_data & 0x0000FFFF);
 
-      if (bus_message->translation != NULL)
+      if (bus_message->translation[0] != '\0')
       {
         display.printf(" (%s)", bus_message->translation);
       }

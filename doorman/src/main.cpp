@@ -443,20 +443,21 @@ void setup()
   esp_bt_controller_deinit();
 
 
-  if (!LittleFS.begin())
-  {
-    log_error("Failed to mount file system");
-    delay(5000);
-    if (!formatLittleFS())
-    {
-      log_error("Failed to format file system - hardware issues!");
-      for (;;)
-      {
-        delay(100);
-      }
-    }
-  }
-  loadSettings(g_config);
+  // Disable LittleFS and config due to error on ESP-C3-32S-kit
+  // if (!LittleFS.begin())
+  // {
+  //   log_error("Failed to mount file system");
+  //   delay(5000);
+  //   if (!formatLittleFS())
+  //   {
+  //     log_error("Failed to format file system - hardware issues!");
+  //     for (;;)
+  //     {
+  //       delay(100);
+  //     }
+  //   }
+  // }
+  // loadSettings(g_config);
   g_config.restartCounter++;
   saveSettings(g_config);
 
@@ -628,16 +629,20 @@ void loop()
       saveSettings(g_config);
     }
     g_mqttConnected = false;
-    delay(1000);
-    return;
+    // Continue even without MQTT connection
+    // delay(1000);
+    // return;
   }
-  if (!g_mqttConnected)
+  else
   {
-    // now we are successfully reconnected and publish our counters
-    g_bssid = WiFi.BSSIDstr();
-    g_mqttView.publishDiagnostics(g_config, g_bssid.c_str());
+    if (!g_mqttConnected)
+    {
+      // now we are successfully reconnected and publish our counters
+      g_bssid = WiFi.BSSIDstr();
+      g_mqttView.publishDiagnostics(g_config, g_bssid.c_str());
+    }
+    g_mqttConnected = true;
   }
-  g_mqttConnected = true;
 
   client.loop();
   if (g_shouldSend)

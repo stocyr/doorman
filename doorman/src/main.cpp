@@ -26,7 +26,6 @@
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 
-
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 
@@ -43,7 +42,6 @@
 #include "html.h"
 #include "mqttview.h"
 #include "oled_display.h"
-
 
 const uint WATCHDOG_TIMEOUT_S = 30;
 const uint WIFI_DISCONNECT_FORCED_RESTART_S = 60;
@@ -77,11 +75,10 @@ OLEDDisplay oled_display;
 
 time_t target_time = 0;
 
-
 const char *HOMEASSISTANT_STATUS_TOPIC = "homeassistant/status";
 const char *HOMEASSISTANT_STATUS_TOPIC_ALT = "ha/status";
 
-Config g_config = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", "", "", 1883, false};
+Config g_config = {0x06F52180, 0x16F52141, 0x36f52100, 0x16F52180, 0x06F52180, 0x16F52141, 0x06F52180, 0, 0, 0, "", "", "", 1883, false};
 
 TriggerPatternRecognition patternRecognitionEntry;
 TriggerPatternRecognition patternRecognitionApartment;
@@ -100,6 +97,8 @@ unsigned long g_tsLastHandsetLiftup = 0;
 bool g_wifiConnected = false;
 bool g_mqttConnected = false;
 unsigned long g_lastWifiConnect = 0;
+unsigned long g_lastMqttConnect = 0;
+bool mqtt_first_try = true;
 
 String g_bssid = "";
 // TODO: wifi auto config
@@ -437,11 +436,8 @@ void setup()
   Serial.begin(115200);
 
   // Disable bluetooth peripheral
-  esp_bluedroid_disable();
-  esp_bluedroid_deinit();
   esp_bt_controller_disable();
   esp_bt_controller_deinit();
-
 
   // Disable LittleFS and config due to error on ESP-C3-32S-kit
   // if (!LittleFS.begin())
@@ -575,7 +571,7 @@ void setup()
     delay(500);
   }
   log_info("Sync time: %s", asctime(&timeinfo));
-  
+
   // Finalize OLED layout
   oled_display.println("Startup complete.");
   delay(1000);
@@ -590,6 +586,8 @@ void loop()
   esp_task_wdt_reset();
 #endif
 
+  char cmd_translation[4] = "\0";
+
   g_led->update();
   bool wifiConnected = connectToWifi();
   if (!wifiConnected)
@@ -602,8 +600,8 @@ void loop()
     }
     if (millis() - g_lastWifiConnect > WIFI_DISCONNECT_FORCED_RESTART_S * 1000)
     {
-      log_warn("Wifi could not connect in time, will force a restart");
-      ESP.restart();
+      log_warn("Wifi could not connect");
+      // ESP.restart();
     }
     g_wifiConnected = false;
     g_mqttConnected = false;
@@ -613,50 +611,63 @@ void loop()
     delay(1000);
     return;
   }
-  g_wifiConnected = true;
-  g_lastWifiConnect = millis();
-
-  server.handleClient(); // Handling of incoming web requests
-  ArduinoOTA.handle();
-
-  bool mqttConnected = connectToMqtt();
-  if (!mqttConnected)
-  {
-    if (g_mqttConnected)
-    {
-      // we switched to disconnected
-      g_config.mqttDisconnectCounter++;
-      saveSettings(g_config);
-    }
-    g_mqttConnected = false;
-    // Continue even without MQTT connection
-    // delay(1000);
-    // return;
-  }
   else
   {
-    if (!g_mqttConnected)
+    // If WiFi connected
+    g_wifiConnected = true;
+    g_lastWifiConnect = millis();
+
+    server.handleClient(); // Handling of incoming web requests
+    ArduinoOTA.handle();
+
+    // Try to connect to MQTT
+    bool mqttConnected = false;
+    if (mqtt_first_try)
     {
-      // now we are successfully reconnected and publish our counters
-      g_bssid = WiFi.BSSIDstr();
-      g_mqttView.publishDiagnostics(g_config, g_bssid.c_str());
+      mqttConnected = connectToMqtt();
+      mqtt_first_try = false;
     }
-    g_mqttConnected = true;
+    if (!mqttConnected)
+    {
+      if (g_mqttConnected)
+      {
+        // we switched to disconnected
+        g_config.mqttDisconnectCounter++;
+        saveSettings(g_config);
+      }
+      g_mqttConnected = false;
+      // Continue even without MQTT connection
+      // delay(1000);
+      // return;
+    }
+    else
+    {
+      if (!g_mqttConnected)
+      {
+        // now we are successfully reconnected and publish our counters
+        g_bssid = WiFi.BSSIDstr();
+        g_mqttView.publishDiagnostics(g_config, g_bssid.c_str());
+      }
+      g_mqttConnected = true;
+
+      // WiFi and MQTT connected
+      client.loop();
+      if (g_shouldSend)
+      {
+        uint32_t cmd = g_commandToSend;
+        g_shouldSend = false;
+        log_info("Sending: %08x", cmd);
+        tcsReader.disable();
+        tcsWriter.write(cmd);
+        tcsReader.enable();
+        // dirty hack to also publish commands we have written
+        tcsReader.inject(cmd);
+        strcat(cmd_translation, "~"); // Denote the translation as such
+        g_led->blinkAsync();
+      }
+    }
   }
 
-  client.loop();
-  if (g_shouldSend)
-  {
-    uint32_t cmd = g_commandToSend;
-    g_shouldSend = false;
-    log_info("Sending: %08x", cmd);
-    tcsReader.disable();
-    tcsWriter.write(cmd);
-    tcsReader.enable();
-    // dirty hack to also publish commands we have written
-    tcsReader.inject(cmd);
-    g_led->blinkAsync();
-  }
   if (tcsReader.hasCommand())
   {
     g_led->blinkAsync();
@@ -665,16 +676,19 @@ void loop()
     if (cmd == g_config.codeApartmentDoorBell)
     {
       g_mqttView.publishApartmentBellTrigger();
+      strcat(cmd_translation, "AB");
     }
 
     if (cmd == g_config.codeEntryDoorBell)
     {
       g_mqttView.publishEntryBellTrigger();
+      strcat(cmd_translation, "EB");
     }
 
     if (cmd == g_config.codeDoorOpener)
     {
       g_mqttView.publishEntryOpenerTrigger();
+      strcat(cmd_translation, "OP");
     }
 
     if (g_config.partyMode && cmd == g_config.codePartyMode)
@@ -685,6 +699,7 @@ void loop()
 
     if (cmd == g_config.codeHandsetLiftup)
     {
+      strcat(cmd_translation, "HS");
       if (millis() - g_tsLastHandsetLiftup < 2000)
       {
         g_handsetLiftup++;
@@ -698,6 +713,11 @@ void loop()
       if (g_handsetLiftup == 3)
       {
         g_config.partyMode = !g_config.partyMode;
+        tm timeinfo;
+        getLocalTime(&timeinfo);
+        target_time = mktime(&timeinfo) + 3600;
+        struct tm *target_time_tm = localtime(&target_time);
+        oled_display.update_party_mode(g_config.partyMode, *target_time_tm);
         g_handsetLiftup = 0;
         g_led->setBackgroundLight(g_config.partyMode);
         g_led->blinkAsync();
@@ -724,13 +744,13 @@ void loop()
     }
 
     log_info("TCS Bus: %08x", cmd);
-    
+
     // Add this message to the display log ring
     tm timeinfo;
     getLocalTime(&timeinfo);
     struct timeval tv_now;
     gettimeofday(&tv_now, NULL);
-    oled_display.add_message_to_history(timeinfo, TIME_DECI_SECOND(tv_now), cmd, "");
+    oled_display.add_message_to_history(timeinfo, TIME_DECI_SECOND(tv_now), cmd, cmd_translation);
     oled_display.redraw();
     g_mqttView.publishBus(cmd);
   }

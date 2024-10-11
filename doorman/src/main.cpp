@@ -45,6 +45,7 @@
 
 const uint WATCHDOG_TIMEOUT_S = 30;
 const uint WIFI_DISCONNECT_FORCED_RESTART_S = 60;
+const uint PARTY_MODE_DURATION = 3600;
 
 WiFiClient net;
 PubSubClient client(net);
@@ -73,12 +74,12 @@ Led *g_led = new LedBuiltin(LED_BUILTIN);
 
 OLEDDisplay oled_display;
 
-time_t target_time = 0;
+time_t party_mode_disable_schedule_time = 0;
 
 const char *HOMEASSISTANT_STATUS_TOPIC = "homeassistant/status";
 const char *HOMEASSISTANT_STATUS_TOPIC_ALT = "ha/status";
 
-Config g_config = {0x06F52180, 0x16F52141, 0x36f52100, 0x16F52180, 0x06F52180, 0x16F52141, 0x06F52180, 0, 0, 0, "", "", "", 1883, false};
+Config g_config = {0x06F52180, 0x16F52141, 0x36f52100, 0x16F52180, 0x06F52180, 0x16F52141, 0x06F52180, 0x66F52108, 0, 0, 0, "", "", "", 1883, false};
 
 TriggerPatternRecognition patternRecognitionEntry;
 TriggerPatternRecognition patternRecognitionApartment;
@@ -429,7 +430,7 @@ void setup()
   esp_task_wdt_add(NULL);                      // add current thread to WDT watch
 #endif
 
-  g_led->begin();
+  //g_led->begin();
   // turn on led until boot sequence finished
   g_led->blinkAsync();
 
@@ -561,6 +562,8 @@ void setup()
         } });
   ArduinoOTA.begin();
 
+  log_info("Arduino OTA: %s, %s", ArduinoOTA.getHostname(), ArduinoOTA.getPartitionLabel());
+
   // Synchronize RTC time with NTP server
   oled_display.println("Synchronizing time...");
   log_info("Syncing time with NTP server...");
@@ -668,8 +671,11 @@ void loop()
     }
   }
 
+  bool redraw_necessary = false;
+
   if (tcsReader.hasCommand())
   {
+    redraw_necessary = true;
     g_led->blinkAsync();
     uint32_t cmd = tcsReader.read();
 
@@ -694,6 +700,8 @@ void loop()
     if (g_config.partyMode && cmd == g_config.codePartyMode)
     {
       // we have a party, let everybody in
+      // randomly delay between 1 and 5 seconds
+      delay(random(2000, 5001));
       openDoor();
     }
 
@@ -713,16 +721,44 @@ void loop()
       if (g_handsetLiftup == 3)
       {
         g_config.partyMode = !g_config.partyMode;
-        tm timeinfo;
-        getLocalTime(&timeinfo);
-        target_time = mktime(&timeinfo) + 3600;
-        struct tm *target_time_tm = localtime(&target_time);
+        if (g_config.partyMode)
+        {
+          tm timeinfo;
+          getLocalTime(&timeinfo);
+          party_mode_disable_schedule_time = mktime(&timeinfo) + PARTY_MODE_DURATION;
+        }
+        else
+        {
+          party_mode_disable_schedule_time = 0;
+        }
+        struct tm *target_time_tm = localtime(&party_mode_disable_schedule_time);
         oled_display.update_party_mode(g_config.partyMode, *target_time_tm);
         g_handsetLiftup = 0;
         g_led->setBackgroundLight(g_config.partyMode);
         g_led->blinkAsync();
         g_mqttView.publishPartyMode(g_config.partyMode);
       }
+    }
+
+    if (cmd == g_config.codeCustomPartyToggler)
+    {
+      g_config.partyMode = !g_config.partyMode;
+      if (g_config.partyMode)
+      {
+        tm timeinfo;
+        getLocalTime(&timeinfo);
+        party_mode_disable_schedule_time = mktime(&timeinfo) + PARTY_MODE_DURATION;
+        log_info("Enabling party mode, expires in %d (current time: %d)", party_mode_disable_schedule_time, mktime(&timeinfo));
+      }
+      else
+      {
+        party_mode_disable_schedule_time = 0;
+      }
+      struct tm *target_time_tm = localtime(&party_mode_disable_schedule_time);
+      oled_display.update_party_mode(g_config.partyMode, *target_time_tm);
+      g_led->setBackgroundLight(g_config.partyMode);
+      g_led->blinkAsync();
+      g_mqttView.publishPartyMode(g_config.partyMode);
     }
 
     if (cmd == g_config.codeEntryPatternDetect)
@@ -745,13 +781,33 @@ void loop()
 
     log_info("TCS Bus: %08x", cmd);
 
-    // Add this message to the display log ring
+    // Add this message to the display log ring buffer
     tm timeinfo;
     getLocalTime(&timeinfo);
     struct timeval tv_now;
     gettimeofday(&tv_now, NULL);
     oled_display.add_message_to_history(timeinfo, TIME_DECI_SECOND(tv_now), cmd, cmd_translation);
-    oled_display.redraw();
     g_mqttView.publishBus(cmd);
+  }
+
+  // Check party mode disabling scheduler
+  tm timeinfo;
+  getLocalTime(&timeinfo);
+  if (g_config.partyMode && (party_mode_disable_schedule_time > 0) && (mktime(&timeinfo) >= party_mode_disable_schedule_time))
+  {
+    log_info("Disabling party mode after %ds", PARTY_MODE_DURATION);
+    g_config.partyMode = false;
+    struct tm *target_time_tm = localtime(&party_mode_disable_schedule_time);
+    oled_display.update_party_mode(g_config.partyMode, *target_time_tm);
+    redraw_necessary = true;
+    g_led->setBackgroundLight(g_config.partyMode);
+    g_led->blinkAsync();
+    g_mqttView.publishPartyMode(g_config.partyMode);
+    party_mode_disable_schedule_time = 0;
+  }
+
+  if (redraw_necessary)
+  {
+    oled_display.redraw();
   }
 }

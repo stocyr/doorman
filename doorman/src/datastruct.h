@@ -10,6 +10,7 @@ struct Config
     uint32_t codeApartmentPatternDetect;
     uint32_t codeEntryPatternDetect;
     uint32_t codePartyMode;
+    uint32_t codeCustomPartyToggler;
     uint32_t restartCounter;
     uint32_t wifiDisconnectCounter;
     uint32_t mqttDisconnectCounter;

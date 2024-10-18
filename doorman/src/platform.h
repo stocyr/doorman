@@ -14,6 +14,16 @@
 #endif
 
 #ifdef ARDUINO_ESP32C3_DEV
+// NodeMCU ESP-C3-32S-Kit-2M
+#define PIN_BUS_READ 2
+#define PIN_BUS_WRITE 1
+#define PIN_OLED_SDA 9
+#define PIN_OLED_SCL 10
+#define LED_WHITE 19
+#endif
+
+#ifdef ARDUINO_LOLIN_D32
+// LOLIN D32
 #define PIN_BUS_READ 2
 #define PIN_BUS_WRITE 1
 #define PIN_OLED_SDA 9

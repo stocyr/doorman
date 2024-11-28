@@ -441,20 +441,20 @@ void setup()
   esp_bt_controller_deinit();
 
   // Disable LittleFS and config due to error on ESP-C3-32S-kit
-  // if (!LittleFS.begin())
-  // {
-  //   log_error("Failed to mount file system");
-  //   delay(5000);
-  //   if (!formatLittleFS())
-  //   {
-  //     log_error("Failed to format file system - hardware issues!");
-  //     for (;;)
-  //     {
-  //       delay(100);
-  //     }
-  //   }
-  // }
-  // loadSettings(g_config);
+  if (!LittleFS.begin())
+  {
+    log_error("Failed to mount file system");
+    delay(5000);
+    if (!formatLittleFS())
+    {
+      log_error("Failed to format file system - hardware issues!");
+      for (;;)
+      {
+        delay(100);
+      }
+    }
+  }
+  loadSettings(g_config);
   g_config.restartCounter++;
   saveSettings(g_config);
 

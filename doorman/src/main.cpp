@@ -440,7 +440,6 @@ void setup()
   esp_bt_controller_disable();
   esp_bt_controller_deinit();
 
-  // Disable LittleFS and config due to error on ESP-C3-32S-kit
   if (!LittleFS.begin())
   {
     log_error("Failed to mount file system");
@@ -775,6 +774,7 @@ void loop()
     {
       if (patternRecognitionApartment.trigger())
       {
+        openDoor();
         g_mqttView.publishApartmentBellPatternTrigger();
       }
     }

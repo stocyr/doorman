@@ -210,23 +210,29 @@ public:
 
     void publishOnOffEdgeSwitch(MqttSwitch &entity)
     {
-        publishMqttState(entity, entity.getOnState());
-        delay(1000);
-        publishMqttState(entity, entity.getOffState());
+        if (m_client->connected()) {
+            publishMqttState(entity, entity.getOnState());
+            delay(1000);
+            publishMqttState(entity, entity.getOffState());
+        }
     }
 
     void publishOnOffEdgeSiren(MqttSiren &entity)
     {
-        publishMqttState(entity, entity.getOnState());
-        delay(1000);
-        publishMqttState(entity, entity.getOffState());
+        if (m_client->connected()) {
+            publishMqttState(entity, entity.getOnState());
+            delay(1000);
+            publishMqttState(entity, entity.getOffState());
+        }
     }
 
     void publishOnOffEdgeBinary(MqttBinarySensor &entity)
     {
-        publishMqttState(entity, entity.getOnState());
-        delay(1000);
-        publishMqttState(entity, entity.getOffState());
+        if (m_client->connected()) {
+            publishMqttState(entity, entity.getOnState());
+            delay(1000);
+            publishMqttState(entity, entity.getOffState());
+        }
     }
 
     void publishConfig(Config &config)
